@@ -10,7 +10,7 @@
     "drizzle-kit": "^0.31.6",
     "express": "^4.19.2",
     "googleapis": "^164.1.0",
-    "node-telegram-bot-api": "^0.61.0",
+    "node-telegram-bot-api": "^0.66.0",
     "tailwindcss": "^4.1.16",
     "tailwindcss-animate": "^1.0.7"
   }
