@@ -1,8 +1,12 @@
 name = "home-tasks-bot"
 compatibility_date = "2024-10-28"
-main = "./src/index.js"
+main = "src/index.js"
 
-# Переменные окружения (токены и ключи)
 [vars]
-TELEGRAM_BOT_TOKEN = "8182546927:AAH2C7YnNOHsUbpL8kyzPSZBhKn0Tx8pyTs"
-SPREADSHEET_ID = "1wJy175VXJGiKdD3fqSGCVVcVifzTB8nClv4tyEsv90"
+SPREADSHEET_ID = "1wJy1r75VXJGiKdD3fqSGCVVcVifzTB8nClv4tyEsv90"
+SHEET_DATA = "Data"
+SHEET_USERS = "Users"
+
+[[triggers.cron]]
+# Ежедневно в 10:00 UTC
+cron = "0 10 * * *"
