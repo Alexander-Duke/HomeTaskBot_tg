@@ -1,5 +1,34 @@
 import { Telegraf } from 'telegraf';
 import { google } from 'googleapis';
+import { initBot } from './bot';
+import { initGoogleSheets } from './sheets';
+import { setupBotHandlers } from './handlers';
+
+export default {
+  async fetch(request, env) {
+
+    if (!sheetsInstance) {
+      sheetsInstance = initGoogleSheets(env.GOOGLE_SERVICE_ACCOUNT_KEY);
+    }
+
+    if (!botInstance) {
+      botInstance = initBot(env.TELEGRAM_BOT_TOKEN, (bot) =>
+        setupBotHandlers(bot, sheetsInstance, env.SPREADSHEET_ID, env.SHEET_DATA, env.SHEET_USERS)
+      );
+    }
+
+    if (request.method === 'GET') {
+      return new Response('✅ Бот работает');
+    }
+
+    if (request.method === 'POST') {
+      await botInstance.handleUpdate(await request.json());
+      return new Response('OK');
+    }
+
+    return new Response('Not Found', { status: 404 });
+  }
+};
 
 // Бот и Google создаются ЛЕНИВО, только один раз:
 let botInstance = null;
@@ -619,41 +648,3 @@ function setupBotHandlers(bot, sheets, SPREADSHEET_ID, SHEET_DATA, SHEET_USERS) 
 }
 
 // === Точка входа для Cloudflare ===
-export default {
-  async fetch(request, env) {
-
-    // ✅ Инициализируем Google Sheets (один раз)
-    if (!sheetsInstance) {
-      sheetsInstance = initGoogleSheets(env.GOOGLE_SERVICE_ACCOUNT_KEY);
-    }
-
-    // ✅ Инициализируем Бота (один раз)
-    if (!botInstance) {
-      botInstance = initBot(env.TELEGRAM_BOT_TOKEN, (bot) =>
-        setupBotHandlers(bot, sheetsInstance, env.SPREADSHEET_ID, env.SHEET_DATA, env.SHEET_USERS)
-      );
-    }
-
-    // Health-check
-    if (request.method === 'GET') {
-      return new Response('✅ Бот работает');
-    }
-
-    // Webhook обработчик Telegram
-    if (request.method === 'POST') {
-      try {
-        await botInstance.handleUpdate(await request.json());
-        return new Response('OK');
-      } catch (err) {
-        console.error('Ошибка обработки:', err);
-        return new Response('Error', { status: 500 });
-      }
-    }
-
-    return new Response('Not Found', { status: 404 });
-  },
-
-  async scheduled(event, env) {
-    console.log("⏰ Scheduled task executed");
-  }
-};
