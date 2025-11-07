@@ -9,5 +9,5 @@ SHEET_DATA = "Data"
 SHEET_USERS = "Users"
 
 # Правильная настройка крон-триггеров
-[[triggers.cron]]
-cron = "0 10 * * *"  # Каждый день в 10:00 UTC
+[triggers]
+crons = ["0 10 * * *"]  # Каждый день в 10:00 UTC
