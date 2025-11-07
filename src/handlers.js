@@ -395,123 +395,92 @@ export function setupBotHandlers(bot, sheets, SPREADSHEET_ID, SHEET_DATA, SHEET_
     if (zone === "ALL") return allTasks;
     return allTasks.filter(t => t.zone === zone);
   }
+
+  const {
+    getZones,
+    getTasksByZone,
+    getExecutorNameByTelegramId,
+    markTaskAsDone,
+    undoTask,
+    getAllActiveTasks
+  } = sheets;
+  
   // === START ===
-  bot.start(async (ctx) => {
-    const zones = await getZones();
-    const buttons = zones.map(z => [{ text: z, callback_data: `zone_${z}` }]);
-    buttons.push([{ text: "📋 Все задачи", callback_data: "zone_ALL" }]);
-    await ctx.reply("Выберите зону:", { reply_markup: { inline_keyboard: buttons } });
-  });
-  // === Обработка /start с кнопками зон ===
-  bot.onText(/\/start/, async (msg) => {
-    const chatId = msg.chat.id;
-    const zones = await getZones();
+  // === Обработка нажатия кнопки зоны ===
+  bot.action(/zone_(.+)/, async (ctx) => {
+    await ctx.answerCbQuery();
 
-    const buttons = zones.map(z => [{ text: z, callback_data: `zone_${z}` }]);
-    buttons.push([{ text: "📋 Все задачи", callback_data: "zone_ALL" }]);
+    const zone = ctx.match[1];
+    const tasks = await getTasksByZone(zone);
 
-    await bot.sendMessage(chatId, "Выберите зону:", {
-      reply_markup: { inline_keyboard: buttons },
+    if (tasks.length === 0) {
+      return ctx.reply(`В зоне "${zone}" нет активных задач.`);
+    }
+
+    const today = new Date().toLocaleDateString("ru-RU");
+
+    const buttons = tasks.map((t) => {
+      const doneToday = t.created === today || t.coef >= 100;
+      const label = doneToday ? `✅ ${t.task}` : t.task;
+      return [{ text: label, callback_data: `task_${t.id}_${zone}_${doneToday ? "undo" : "done"}` }];
+    });
+
+    return ctx.reply(`📍 ${zone}\nВыберите задачу:`, {
+      reply_markup: { inline_keyboard: buttons }
     });
   });
 
-  // === Обработка нажатия на зону ===
-  bot.on("callback_query", async (query) => {
-    const chatId = query.message.chat.id;
-    const messageId = query.message.message_id;
-    const data = query.data;
 
-    // === 1️⃣ Обработка выбора зоны ===
-    if (data.startsWith("zone_")) {
-      const zone = data.replace("zone_", "");
-      const tasks = await getTasksByZone(zone);
-      if (tasks.length === 0) {
-        await bot.sendMessage(chatId, `В зоне "${zone}" нет активных задач.`);
-        return;
-      }
+  // === Обработка выбора задачи ===
+  bot.action(/task_(.+)_(.+)_(done|undo)/, async (ctx) => {
+    const [, taskId, zone, action] = ctx.match;
+    const userId = ctx.from.id;
+    const executorName = await getExecutorNameByTelegramId(userId);
 
+    let success = false;
+
+    if (action === "done") {
+      success = await markTaskAsDone(taskId, executorName);
+      await ctx.answerCbQuery(success ? "Задача отмечена ✅" : "Ошибка ❌");
+    } else {
+      success = await undoTask(taskId);
+      await ctx.answerCbQuery(success ? "Отмена выполнения 🔄" : "Ошибка ❌");
+    }
+
+    if (!success) return;
+
+    // ждём обновления таблицы
+    await new Promise(res => setTimeout(res, 1000));
+
+    try {
+      const updated = await getTasksByZone(zone);
       const today = new Date().toLocaleDateString("ru-RU");
-      const buttons = tasks.map((t) => {
+
+      const updatedButtons = updated.map((t) => {
         const doneToday = t.created === today || t.coef >= 100;
         const label = doneToday ? `✅ ${t.task}` : t.task;
         return [{ text: label, callback_data: `task_${t.id}_${zone}_${doneToday ? "undo" : "done"}` }];
       });
 
-      await bot.sendMessage(chatId, `📍 ${zone}\nВыберите задачу:`, {
-        reply_markup: { inline_keyboard: buttons },
+      await ctx.editMessageReplyMarkup({
+        inline_keyboard: updatedButtons
       });
-      return;
-    }
 
-    // === 2️⃣ Обработка выбора задачи ===
-    if (data.startsWith("task_")) {
-      const parts = data.split("_");
-      const taskId = parts[1];
-      const zone = parts[2]; // добавили зону, чтобы знать, какие кнопки обновлять
-      const action = parts[3];
-
-      const userId = query.from.id;
-      const executorName = await getExecutorNameByTelegramId(userId);
-
-      let success = false;
-
-      if (action === "done") {
-        success = await markTaskAsDone(taskId, executorName);
-        await bot.answerCallbackQuery(query.id, { text: success ? "Задача отмечена ✅" : "Ошибка при обновлении ❌" });
-      } else if (action === "undo") {
-        success = await undoTask(taskId);
-        await bot.answerCallbackQuery(query.id, { text: success ? "Отмена выполнения 🔄" : "Не удалось отменить ❌" });
+    } catch (err) {
+      if (String(err).includes("message is not modified")) {
+        console.log("ℹ️ Пропущено обновление кнопок");
+      } else {
+        console.error("⚠️ Ошибка обновления:", err);
       }
-
-      // === 3️⃣ После успешного действия обновляем кнопки ===
-      if (success) {
-        // Дадим Google Sheets 1 секунду на обновление данных
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        try {
-          const updatedTasks = await getTasksByZone(zone);
-          const today = new Date().toLocaleDateString("ru-RU");
-
-          const updatedButtons = updatedTasks.map((t) => {
-            const doneToday = t.created === today || t.coef >= 100;
-            const label = doneToday ? `✅ ${t.task}` : t.task;
-            return [{ text: label, callback_data: `task_${t.id}_${zone}_${doneToday ? "undo" : "done"}` }];
-          });
-
-          await bot.editMessageReplyMarkup(
-            { inline_keyboard: updatedButtons },
-            { chat_id: chatId, message_id: messageId }
-          );
-        } catch (err) {
-          // --- Вот эта часть добавлена ---
-          // Telegram иногда возвращает 400 Bad Request, если кнопки не изменились.
-          // Это не критично — просто пропускаем.
-          if (
-            err.response &&
-            err.response.body &&
-            err.response.body.description &&
-            err.response.body.description.includes("message is not modified")
-          ) {
-            console.log("ℹ️ Пропущено обновление: message is not modified");
-          } else {
-            console.error("⚠️ Ошибка при обновлении кнопок:", err.message);
-          }
-        }
-      }
-
     }
   });
 
 
-
-  bot.onText(/\/tasks/, async (msg) => {
-    const chatId = msg.chat.id;
+  // === /tasks ===
+  bot.command("tasks", async (ctx) => {
     const tasks = await getAllActiveTasks();
 
-    if (tasks.length === 0) {
-      bot.sendMessage(chatId, "✅ Нет активных задач!");
-      return;
-    }
+    if (tasks.length === 0) return ctx.reply("✅ Нет активных задач!");
 
     let text = "🧹 <b>Все активные задачи (по срочности):</b>\n\n";
     tasks.slice(0, 20).forEach((t, i) => {
@@ -519,17 +488,15 @@ export function setupBotHandlers(bot, sheets, SPREADSHEET_ID, SHEET_DATA, SHEET_
       text += `${urgency} ${i + 1}. ${t.task}\n   📍 ${t.zone} (коэф. ${t.coef.toFixed(2)})\n\n`;
     });
 
-    bot.sendMessage(chatId, text, { parse_mode: "HTML" });
+    ctx.reply(text, { parse_mode: "HTML" });
   });
 
-  bot.onText(/\/zones/, async (msg) => {
-    const chatId = msg.chat.id;
+
+  // === /zones ===
+  bot.command("zones", async (ctx) => {
     const tasks = await getAllActiveTasks();
 
-    if (tasks.length === 0) {
-      bot.sendMessage(chatId, "✅ Нет активных задач!");
-      return;
-    }
+    if (tasks.length === 0) return ctx.reply("✅ Нет активных задач!");
 
     const zones = {};
     tasks.forEach(t => {
@@ -538,55 +505,49 @@ export function setupBotHandlers(bot, sheets, SPREADSHEET_ID, SHEET_DATA, SHEET_
     });
 
     let text = "🧩 <b>Задачи по зонам:</b>\n\n";
-    for (const [zone, zoneTasks] of Object.entries(zones)) {
+    for (const [zone, list] of Object.entries(zones)) {
       text += `📍 <b>${zone}</b>\n`;
-      zoneTasks.forEach(t => {
+      list.forEach(t => {
         const urgency = t.coef < 0.3 ? "🔴" : "🟢";
         text += `  ${urgency} ${t.task} (${t.coef.toFixed(2)})\n`;
       });
       text += "\n";
     }
 
-    bot.sendMessage(chatId, text, { parse_mode: "HTML" });
+    ctx.reply(text, { parse_mode: "HTML" });
   });
 
-  bot.onText(/\/done/, async (msg) => {
-    const chatId = msg.chat.id;
-    const userId = msg.from.id;
+
+  // === /done ===
+  bot.command("done", async (ctx) => {
+    const userId = ctx.from.id;
     const executorName = await getExecutorNameByTelegramId(userId);
     const tasks = await getAllActiveTasks();
 
-    if (tasks.length === 0) {
-      bot.sendMessage(chatId, "✅ Нет задач для отметки!");
-      return;
-    }
+    if (tasks.length === 0) return ctx.reply("✅ Нет задач для отметки!");
 
-    let text = "✅ Выберите задачу для отметки:\n\n";
+    let text = "✅ Выберите задачу (отправьте цифру):\n\n";
     tasks.slice(0, 10).forEach((t, i) => {
-      const urgency = t.coef < 30 ? "🔴" : t.coef < 70 ? "🟡" : "🟢";
-      text += `${i + 1}. ${t.task} (${t.zone}) — ${t.coef}%\n`;
+      const urgency = t.coef < 0.3 ? "🔴" : t.coef < 0.7 ? "🟡" : "🟢";
+      text += `${i + 1}. ${t.task} (${t.zone}) — ${urgency}\n`;
     });
-    text += "\nОтправьте номер задачи (например, «1»).";
 
-    const sent = await bot.sendMessage(chatId, text);
+    const msg = await ctx.reply(text);
 
-    const replyHandler = async (replyMsg) => {
-      if (replyMsg.from.id !== userId) return;
-      const num = parseInt(replyMsg.text);
+    bot.on("text", async (inner) => {
+      if (inner.from.id !== userId) return;
+      const num = parseInt(inner.message.text);
+
       if (num >= 1 && num <= tasks.length) {
         const task = tasks[num - 1];
         const success = await markTaskAsDone(task.id, executorName);
-        if (success) {
-          bot.sendMessage(chatId, `✅ Задача «${task.task}» отмечена как выполненная!\nИсполнитель: ${executorName}`);
-        } else {
-          bot.sendMessage(chatId, "❌ Не удалось обновить задачу. Проверьте ID в таблице.");
-        }
-        bot.removeListener("message", replyHandler);
+        await ctx.reply(success
+          ? `✅ Задача «${task.task}» отмечена!\nИсполнитель: ${executorName}`
+          : "❌ Ошибка обновления задачи."
+        );
+        bot.off("text"); // отключаем обработчик
       }
-    };
-
-    bot.on("message", replyHandler);
+    });
   });
 
-  // === И здесь продолжай вставлять ВСЕ остальные bot.action... ===
 }
