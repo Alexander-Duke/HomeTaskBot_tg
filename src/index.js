@@ -18,7 +18,12 @@ export default {
 
       if (request.method === "POST") {
         const update = await request.json();
-        await botInstance.handleUpdate(update, env, { webhookReply: true });
+        try {
+          await botInstance.handleUpdate(await request.json());
+        } catch (err) {
+          console.error("🔴 Telegram handler error:", err);
+        }
+
         return new Response("OK");
       }
 
