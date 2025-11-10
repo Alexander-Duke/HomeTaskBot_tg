@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "googleapis": "^126.0.1",
+    "grammy": "^1.38.3",
     "telegraf": "^4.16.3"
   },
   "devDependencies": {

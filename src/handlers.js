@@ -17,7 +17,7 @@ export function setupBotHandlers(bot, env) {
 }
 
 
-export function setupBotHandlers(bot, sheets, SPREADSHEET_ID, SHEET_DATA, SHEET_USERS) {
+//export function setupBotHandlers(bot, sheets, SPREADSHEET_ID, SHEET_DATA, SHEET_USERS) {
 
   // === Обработка выбора зоны ===
   bot.action(/zone_(.+)/, async (ctx) => {
