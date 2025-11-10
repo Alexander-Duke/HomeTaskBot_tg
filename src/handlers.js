@@ -7,9 +7,15 @@ import {
   getAllActiveTasks
 } from "./sheets.js";
 
-bot.start(async (ctx) => {
-  await ctx.reply("👋 Бот запущен! Сейчас подключаем Google Sheets...");
-});
+export function setupBotHandlers(bot, env) {
+
+  bot.command("start", async (ctx) => {
+    await ctx.reply("👋 Бот запущен! Переезд в Cloudflare Workers идет успешно.");
+  });
+
+  // позже добавим остальное…
+}
+
 
 export function setupBotHandlers(bot, sheets, SPREADSHEET_ID, SHEET_DATA, SHEET_USERS) {
 

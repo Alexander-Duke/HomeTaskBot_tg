@@ -1,14 +1,10 @@
-import { Telegraf } from 'telegraf';
+import { Bot } from "grammy";
 
 export function initBot(token, setupHandlers) {
-  const bot = new Telegraf(token, {
-    webhookReply: true // важно для скорости
-  });
+  const bot = new Bot(token);
 
   setupHandlers(bot);
 
-  // На Cloudflare Workers мы НЕ запускаем bot.launch()
-  // У нас нет сервера — входящие запросы идут в index.js → bot.handleUpdate()
-
+  // Ничего не запускаем (`bot.start()` нельзя в Workers)
   return bot;
 }
