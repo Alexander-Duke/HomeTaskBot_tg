@@ -1,4 +1,4 @@
-name = "home-tasks-bot"
+name = "home-task-bot"
 main = "src/index.js"
 compatibility_date = "2023-11-10"
 compatibility_flags = ["nodejs_compat"]
