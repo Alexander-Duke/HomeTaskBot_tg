@@ -1,39 +1,31 @@
-import { initBot } from './bot';
-import { initGoogleSheets } from './sheets';
-import { setupBotHandlers } from './handlers';
+import { initBot } from './bot.js';
+import { setupBotHandlers } from './handlers.js';
 
 let botInstance = null;
-let sheetsInstance = null;
 
 export default {
   async fetch(request, env) {
     try {
-      if (!sheetsInstance) {
-        sheetsInstance = initGoogleSheets(env.GOOGLE_SERVICE_ACCOUNT_KEY);
-      }
-
+      // === Инициализация бота один раз ===
       if (!botInstance) {
-        botInstance = initBot(env.TELEGRAM_BOT_TOKEN, (bot) =>
-          setupBotHandlers(
-            bot,
-            sheetsInstance,
-            env.SPREADSHEET_ID,
-            env.SHEET_DATA,
-            env.SHEET_USERS
-          )
+        botInstance = initBot(env.TELEGRAM_BOT_TOKEN, (bot) => 
+          setupBotHandlers(bot, env)
         );
       }
 
+      // === Health-check / browser check ===
       if (request.method === 'GET') {
-        return new Response('✅ Бот работает');
+        return new Response('✅ Бот запущен и ожидает webhook');
       }
 
+      // === Обработка входящего webhook от Telegram ===
       if (request.method === 'POST') {
-        await botInstance.handleUpdate(await request.json());
+        const update = await request.json();
+        await botInstance.handleUpdate(update);
         return new Response('OK');
       }
 
-      return new Response('Not Found', { status: 404 });
+      return new Response('Not found', { status: 404 });
 
     } catch (err) {
       console.error("🔥 Runtime error:", err);
@@ -41,4 +33,3 @@ export default {
     }
   }
 };
-

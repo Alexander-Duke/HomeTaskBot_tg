@@ -7,7 +7,11 @@ import {
   getAllActiveTasks
 } from "./sheets.js";
 
-export function setupBotHandlers(bot, env, SHEET_DATA, SHEET_USERS) {
+bot.start(async (ctx) => {
+  await ctx.reply("👋 Бот запущен! Сейчас подключаем Google Sheets...");
+});
+
+export function setupBotHandlers(bot, sheets, SPREADSHEET_ID, SHEET_DATA, SHEET_USERS) {
 
   // === Обработка выбора зоны ===
   bot.action(/zone_(.+)/, async (ctx) => {

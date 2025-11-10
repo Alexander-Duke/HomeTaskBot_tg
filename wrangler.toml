@@ -1,14 +1,15 @@
-name = "home-task-bot"
-compatibility_date = "2024-11-06"
+name = "home-tasks-bot"
 main = "src/index.js"
-compatibility_flags = ["nodejs_compat"]  # ← КРИТИЧЕСКИ ВАЖНО
-account_id = "7d6420c6564042764d3729c1b49d1ece"
+compatibility_date = "2023-11-10"
+compatibility_flags = ["nodejs_compat"]
 
 [vars]
-SPREADSHEET_ID = "1wJy1r75VXJGiKdD3fqSGCVVcVifzTB8nClv4tyEsv90"
+BASE_URL = "https://your-worker.your-subdomain.workers.dev"
+SHEET_LOG = "Log"
 SHEET_DATA = "Data"
 SHEET_USERS = "Users"
 
-# Правильная настройка крон-триггеров
-[triggers]
-crons = ["0 10 * * *"]  # Каждый день в 10:00 UTC
+[[kv_namespaces]]
+binding = "BOT_STATE"
+preview_id = "preview-id-here"
+id = "production-id-here"
