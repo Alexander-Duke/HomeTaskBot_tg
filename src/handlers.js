@@ -17,77 +17,7 @@ export function setupBotHandlers(bot, env) {
 }
 
 
-//export function setupBotHandlers(bot, sheets, SPREADSHEET_ID, SHEET_DATA, SHEET_USERS) {
 
-  // === Обработка выбора зоны ===
-  bot.action(/zone_(.+)/, async (ctx) => {
-    await ctx.answerCbQuery();
-    const zone = ctx.match[1];
-    const tasks = await getTasksByZone(sheets, SPREADSHEET_ID, SHEET_DATA, zone);
-
-    if (tasks.length === 0) {
-      return ctx.reply(`В зоне "${zone}" нет активных задач.`);
-    }
-
-    const today = new Date().toLocaleDateString("ru-RU");
-    const buttons = tasks.map((t) => {
-      const doneToday = t.created === today || t.coef >= 100;
-      const label = doneToday ? `✅ ${t.task}` : t.task;
-      return [{ text: label, callback_data: `task_${t.id}_${zone}_${doneToday ? "undo" : "done"}` }];
-    });
-
-    return ctx.reply(`📍 ${zone}\nВыберите задачу:`, {
-      reply_markup: { inline_keyboard: buttons }
-    });
-  });
-
-  // === Обработка выполнения / отмены ===
-  bot.action(/task_(.+)_(.+)_(done|undo)/, async (ctx) => {
-    const [, taskId, zone, action] = ctx.match;
-    const userId = ctx.from.id;
-    const executorName = await getExecutorNameByTelegramId(sheets, SPREADSHEET_ID, SHEET_USERS, userId);
-
-    const success =
-      action === "done"
-        ? await markTaskAsDone(sheets, SPREADSHEET_ID, SHEET_DATA, taskId, executorName)
-        : await undoTask(sheets, SPREADSHEET_ID, SHEET_DATA, taskId);
-
-    await ctx.answerCbQuery(success ? "Готово ✅" : "Ошибка ❌");
-    if (!success) return;
-
-    await new Promise(res => setTimeout(res, 1000));
-
-    const updated = await getTasksByZone(sheets, SPREADSHEET_ID, SHEET_DATA, zone);
-    const today = new Date().toLocaleDateString("ru-RU");
-
-    const updatedButtons = updated.map((t) => {
-      const doneToday = t.created === today || t.coef >= 100;
-      return [{ text: doneToday ? `✅ ${t.task}` : t.task, callback_data: `task_${t.id}_${zone}_${doneToday ? "undo" : "done"}` }];
-    });
-
-    await ctx.editMessageReplyMarkup({ inline_keyboard: updatedButtons }).catch(() => {});
-  });
-
-  // === Команда /tasks ===
-  bot.command("tasks", async (ctx) => {
-    const tasks = await getAllActiveTasks(sheets, SPREADSHEET_ID, SHEET_DATA);
-    if (tasks.length === 0) return ctx.reply("✅ Нет активных задач!");
-
-    let text = "🧹 <b>Все активные задачи (по срочности):</b>\n\n";
-    tasks.slice(0, 20).forEach((t, i) => {
-      const urgency = t.coef < 0.3 ? "🔴" : t.coef < 0.7 ? "🟡" : "🟢";
-      text += `${urgency} ${i + 1}. ${t.task}\n   📍 ${t.zone} (коэф. ${t.coef.toFixed(2)})\n\n`;
-    });
-
-    ctx.reply(text, { parse_mode: "HTML" });
-  });
-}
-
-// === ВАЖНО ===
-// Убедись, что в env есть:
-// GOOGLE_SERVICE_KEY_BASE64  (зашифрованный JSON сервис-аккаунта)
-
-// Получаем access_token для Google Sheets API
 async function getAccessToken(env) {
   const keyJson = JSON.parse(atob(env.GOOGLE_SERVICE_KEY_BASE64));
 
